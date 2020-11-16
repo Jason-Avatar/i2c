@@ -1,0 +1,166 @@
+/////////////從網路上找到的LCD 1602用8051的實現方式(確認可用)
+
+#include <AT89x51.H>
+
+sbit sda = P2^0;
+sbit scl = P2^1;
+
+#define SLAVE 0x4E //LCM1602 Address
+
+void delay(unsigned int dl)
+{
+ while (dl>0)
+  dl--;
+}
+
+void start()
+{
+ scl = 1;
+ delay(5);
+ sda = 1;
+ delay(5);
+ sda = 0;
+ delay(4);
+}
+
+void send_8bits(unsigned char strg)
+{
+ unsigned char sf;
+ 
+ for (sf=0; sf<8; sf++)
+ {
+  scl = 0;
+  sda =(bit)(strg & (0x80>>sf));
+  delay(5);
+  scl = 1;
+  delay(4);
+ }
+ scl = 0;
+ delay(5);
+}
+
+void ack(void)
+{
+ sda = 0; 
+ 
+ while(sda == 0)
+ {  
+  scl = 1;
+  delay(4);
+  scl = 0;
+  delay(5);
+ }
+}
+
+void stop(void)
+{
+ sda = 0;
+ scl = 1;
+ delay(5);
+ sda = 1;
+}
+
+void WriteInst4bits(unsigned char inst_4b)
+{
+ send_8bits(0x08);         //RS=0, RW=0
+ ack();
+ send_8bits(0x0C);         //EN=1
+ ack();
+ send_8bits((inst_4b&0xF0)+0x0C); 
+ ack();
+ send_8bits((inst_4b&0xF0)+0x08); 
+ ack();
+}
+
+void WriteInst(unsigned char inst)
+{ 
+ send_8bits(0x08);         //RS=0, RW=0
+ ack();
+ send_8bits(0x0C);         //EN=1
+ ack();
+ send_8bits((inst&0xF0)+0x0C);   
+ ack();
+ send_8bits((inst&0xF0)+0x08);   
+ ack();
+ 
+ send_8bits(0x0C);         //EN=1
+ ack();
+ send_8bits((inst<<4)+0x0C);    
+ ack();
+ send_8bits((inst<<4)+0x08);    
+ ack();
+} 
+
+void WriteData(unsigned char data_)
+{
+ send_8bits(0x0D);         //EN=1
+ ack();
+ send_8bits((data_&0xF0)+0x0D); 
+ ack();
+ send_8bits((data_&0xF0)+0x09);  
+ ack();
+ 
+ send_8bits(0x0D);         //EN=1
+ ack();
+ send_8bits((data_<<4)+0x0D);   
+ ack();
+ send_8bits((data_<<4)+0x09);   
+ ack();
+} 
+
+void WriteString(unsigned char count, unsigned char MSG[])
+{
+ unsigned char sf;
+ unsigned char move = 0;
+ 
+send_8bits(0xF9);         //RS=1, RW=0
+ ack();
+ for (sf=0; sf<count; sf++)
+   WriteData(MSG[sf]);
+}
+
+void initial(void)
+{
+ delay(15000);
+ 
+ start();
+ send_8bits(SLAVE);  //ׇ載入LCD Address
+ ack();
+ 
+ WriteInst4bits(0x30);
+ 
+ delay(4100);
+ 
+ WriteInst4bits(0x30);
+ 
+ delay(100);
+
+ WriteInst4bits(0x30); 
+ WriteInst4bits(0x20); 
+  
+ WriteInst(0x28); 
+ WriteInst(0x08); 
+ WriteInst(0x01); 
+ WriteInst(0x06); 
+ WriteInst(0x0E); 
+}
+
+void main()
+{
+ unsigned char Euro[] = {0x07, 0x08, 0x1F, 0x08, 0x1F, 0x08, 0x07, 0x00};
+ unsigned char MSG_1[] = "Hello 8051";
+ unsigned char MSG_2[] = {'I','t',' ','c','o','s','t','s',' ','1','7','9',',','8','9',0,' '};
+ 
+ initial();
+ 
+ WriteInst(0x40);  
+ WriteString(sizeof(Euro), Euro); 
+ 
+ WriteInst(0x80);  
+ WriteString(sizeof(MSG_1)-1, MSG_1);
+ 
+ WriteInst(0xC0);  
+ WriteString(sizeof(MSG_2)-1, MSG_2);
+ 
+ while(1);
+}
